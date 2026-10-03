@@ -1041,6 +1041,11 @@ function drawRoadDetails() {
 
 function drawBuilding(b,time) {
 
+   if (window.drawDetailedBuilding) {
+  window.drawDetailedBuilding(b, time);
+  return;
+}
+
   const p =
     project(
       b.x+b.w/2,

@@ -8,9 +8,7 @@ body {
   width: 100%;
   height: 100%;
   overflow: hidden;
-
-  background:
-    #04070d;
+  background: #03060b;
 }
 
 body {
@@ -22,140 +20,126 @@ body {
 
 #game {
   position: relative;
-
   width: 100vw;
   height: 100vh;
-
   overflow: hidden;
 }
 
 canvas {
   position: absolute;
   inset: 0;
-
   display: block;
-
   width: 100%;
   height: 100%;
-
-  background: #050912;
+  background: #03060b;
 }
 
 #location {
   position: absolute;
-
-  top: 25px;
-  left: 29px;
-
-  padding:
-    14px 22px 13px;
-
-  color: #e9ffff;
-
+  top: 24px;
+  left: 28px;
+  padding: 13px 21px 14px;
+  color: #eaffff;
   background:
     linear-gradient(
       135deg,
-      rgba(5,10,18,.94),
-      rgba(10,25,35,.84)
+      rgba(4,9,15,.93),
+      rgba(7,21,30,.84)
     );
-
-  border:
-    1px solid
-    rgba(88,230,255,.18);
-
-  border-radius: 3px;
-
+  border: 1px solid rgba(75,225,255,.19);
+  border-radius: 4px;
   box-shadow:
-    0 0 25px rgba(0,210,255,.08),
-    0 15px 45px rgba(0,0,0,.45);
-
-  backdrop-filter:
-    blur(12px);
+    0 0 28px rgba(0,220,255,.07),
+    0 18px 45px rgba(0,0,0,.42);
+  backdrop-filter: blur(12px);
+  pointer-events: none;
 }
 
 .series {
+  color: #63e9ff;
   font-size: 10px;
-
-  letter-spacing: .28em;
-
-  color: #6eeaff;
-
-  opacity: .75;
+  letter-spacing: .27em;
+  opacity: .74;
 }
 
 .title {
   margin-top: 3px;
-
-  font-family:
-    "Yu Mincho",
-    serif;
-
-  font-size: 28px;
-
-  letter-spacing: .17em;
-
-  text-shadow:
-    0 0 12px
-    rgba(76,224,255,.35);
+  font-family: "Yu Mincho", serif;
+  font-size: 27px;
+  letter-spacing: .15em;
+  text-shadow: 0 0 12px rgba(80,230,255,.28);
 }
 
 .cn {
-  margin-top: 5px;
-
+  margin-top: 4px;
+  color: #df67ff;
   font-size: 8px;
-
-  letter-spacing: .24em;
-
-  color: #e765ff;
-
-  opacity: .7;
+  letter-spacing: .22em;
+  opacity: .72;
 }
 
 #controls {
   position: absolute;
-
   left: 50%;
-  bottom: 20px;
-
-  transform:
-    translateX(-50%);
-
-  padding:
-    8px 17px;
-
-  color:
-    rgba(225,244,248,.82);
-
-  background:
-    rgba(3,7,12,.72);
-
-  border:
-    1px solid
-    rgba(75,216,240,.13);
-
+  bottom: 18px;
+  transform: translateX(-50%);
+  padding: 8px 17px;
+  color: rgba(225,242,245,.72);
+  background: rgba(2,6,10,.72);
+  border: 1px solid rgba(85,220,240,.12);
   border-radius: 30px;
-
-  font-size: 11px;
-
-  backdrop-filter:
-    blur(10px);
+  font-size: 10px;
+  letter-spacing: .05em;
+  backdrop-filter: blur(10px);
+  pointer-events: none;
 }
 
-#controls strong {
-  margin-left: 9px;
+#interaction {
+  position: absolute;
+  left: 50%;
+  bottom: 74px;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 9px 16px 9px 10px;
+  color: #eaffff;
+  background: rgba(3,9,13,.93);
+  border: 1px solid rgba(82,231,255,.38);
+  border-radius: 5px;
+  box-shadow:
+    0 0 18px rgba(51,220,255,.13),
+    0 10px 30px rgba(0,0,0,.35);
+  font-size: 12px;
+  transition:
+    opacity .15s,
+    transform .15s;
+}
 
-  color: #6feaff;
+#interaction.hidden {
+  opacity: 0;
+  transform: translate(-50%, 7px);
+  pointer-events: none;
+}
 
-  font-weight: normal;
+.key {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 25px;
+  height: 25px;
+  color: #031014;
+  background: #65eaff;
+  border-radius: 4px;
+  font-weight: bold;
+  box-shadow: 0 0 12px rgba(70,230,255,.4);
 }
 
 #vignette {
   position: absolute;
   inset: 0;
-
   pointer-events: none;
-
   box-shadow:
-    inset 0 0 180px rgba(0,0,0,.55),
-    inset 0 -120px 160px rgba(0,0,0,.28);
+    inset 0 0 190px rgba(0,0,0,.56),
+    inset 0 -120px 150px rgba(0,0,0,.25);
 }

@@ -1,7 +1,15 @@
 /* ==========================================================
    杭州探索録 3
    都市杭州
-   City Prototype Ver.0.1
+   Perspective Prototype Ver.0.2
+
+   目的：
+   ・完全俯瞰をやめる
+   ・3/4ビュー
+   ・正面壁を大きく見せる
+   ・奥ほど小さく
+   ・手前ほど巨大に
+   ・HD-2D的な前景 / 中景 / 遠景
 ========================================================== */
 
 const canvas =
@@ -10,8 +18,9 @@ const canvas =
 const ctx =
   canvas.getContext("2d");
 
-let VW = 0;
-let VH = 0;
+
+let W = 0;
+let H = 0;
 
 const DPR =
   Math.min(
@@ -26,20 +35,26 @@ const DPR =
 
 function resize() {
 
-  VW = window.innerWidth;
-  VH = window.innerHeight;
+  W =
+    window.innerWidth;
+
+  H =
+    window.innerHeight;
+
 
   canvas.width =
-    VW * DPR;
+    W * DPR;
 
   canvas.height =
-    VH * DPR;
+    H * DPR;
+
 
   canvas.style.width =
-    VW + "px";
+    W + "px";
 
   canvas.style.height =
-    VH + "px";
+    H + "px";
+
 
   ctx.setTransform(
     DPR,
@@ -62,12 +77,33 @@ resize();
 
 /* ==========================================================
    WORLD
+
+   x = 横方向
+   y = 奥行き
+
+   y が小さいほど奥
+   y が大きいほど手前
 ========================================================== */
 
 const WORLD = {
 
-  width: 2600,
-  height: 3000
+  width: 2200,
+  height: 3600
+
+};
+
+
+/* ==========================================================
+   CAMERA
+
+   今回は画面中央ではなく
+   少し下にプレイヤーを置く
+========================================================== */
+
+const camera = {
+
+  x: 1100,
+  y: 2850
 
 };
 
@@ -78,28 +114,16 @@ const WORLD = {
 
 const player = {
 
-  x: 1300,
-  y: 2550,
+  x: 1100,
+  y: 2850,
 
-  speed: 245,
+  speed: 270,
 
   moving: false,
 
-  step: 0,
+  direction: "up",
 
-  direction: "up"
-
-};
-
-
-/* ==========================================================
-   CAMERA
-========================================================== */
-
-const camera = {
-
-  x: player.x,
-  y: player.y
+  step: 0
 
 };
 
@@ -109,6 +133,7 @@ const camera = {
 ========================================================== */
 
 const keys = {};
+
 
 window.addEventListener(
   "keydown",
@@ -120,6 +145,7 @@ window.addEventListener(
 
   }
 );
+
 
 window.addEventListener(
   "keyup",
@@ -137,49 +163,18 @@ window.addEventListener(
    HELPERS
 ========================================================== */
 
-function clamp(v,min,max) {
+function clamp(
+  value,
+  min,
+  max
+) {
 
   return Math.max(
     min,
-    Math.min(max,v)
-  );
-
-}
-
-
-function screen(x,y) {
-
-  return {
-
-    x:
-      x -
-      camera.x +
-      VW/2,
-
-    y:
-      y -
-      camera.y +
-      VH/2
-
-  };
-
-}
-
-
-function visible(
-  x,
-  y,
-  margin=400
-) {
-
-  const p =
-    screen(x,y);
-
-  return (
-    p.x > -margin &&
-    p.x < VW + margin &&
-    p.y > -margin &&
-    p.y < VH + margin
+    Math.min(
+      max,
+      value
+    )
   );
 
 }
@@ -190,10 +185,112 @@ function noise(n) {
   const x =
     Math.sin(
       n * 12.9898
-    ) * 43758.5453;
+    ) *
+    43758.5453;
 
   return x -
     Math.floor(x);
+
+}
+
+
+/* ==========================================================
+   PERSPECTIVE
+
+   ここが今回の核心。
+
+   world y の距離によって
+   横方向・縦方向の見え方を変える。
+
+   画面上端 = 遠景
+   画面下端 = 手前
+========================================================== */
+
+const VIEW = {
+
+  horizon:
+    150,
+
+  playerScreenY:
+    0.72,
+
+  depthScale:
+    0.48,
+
+  perspective:
+    0.00034
+
+};
+
+
+/* ==========================================================
+   WORLD → SCREEN
+
+   単なる x-camera.x / y-camera.y
+   ではない。
+
+   奥ほど横方向も縮める。
+========================================================== */
+
+function project(
+  x,
+  y,
+  z = 0
+) {
+
+  const dy =
+    y -
+    camera.y;
+
+
+  /*
+     奥ほど小さい
+     手前ほど大きい
+  */
+
+  let scale =
+    1 +
+    dy *
+    VIEW.perspective;
+
+
+  scale =
+    clamp(
+      scale,
+      .46,
+      1.55
+    );
+
+
+  const screenY =
+    H *
+    VIEW.playerScreenY +
+    dy *
+    VIEW.depthScale;
+
+
+  const screenX =
+    W / 2 +
+    (
+      x -
+      camera.x
+    ) *
+    scale;
+
+
+  return {
+
+    x:
+      screenX,
+
+    y:
+      screenY -
+      z *
+      scale,
+
+    scale
+
+  };
 
 }
 
@@ -213,7 +310,7 @@ function update(dt) {
     keys["arrowup"]
   ) {
 
-    dy--;
+    dy -= 1;
 
     player.direction =
       "up";
@@ -226,7 +323,7 @@ function update(dt) {
     keys["arrowdown"]
   ) {
 
-    dy++;
+    dy += 1;
 
     player.direction =
       "down";
@@ -239,7 +336,7 @@ function update(dt) {
     keys["arrowleft"]
   ) {
 
-    dx--;
+    dx -= 1;
 
     player.direction =
       "left";
@@ -252,7 +349,7 @@ function update(dt) {
     keys["arrowright"]
   ) {
 
-    dx++;
+    dx += 1;
 
     player.direction =
       "right";
@@ -269,24 +366,31 @@ function update(dt) {
     player.moving
   ) {
 
-    const len =
-      Math.hypot(dx,dy);
+    const length =
+      Math.hypot(
+        dx,
+        dy
+      );
 
-    dx /= len;
-    dy /= len;
+
+    dx /= length;
+    dy /= length;
+
 
     player.x +=
       dx *
       player.speed *
       dt;
 
+
     player.y +=
       dy *
       player.speed *
       dt;
 
+
     player.step +=
-      dt * 11;
+      dt * 10;
 
   }
 
@@ -294,29 +398,37 @@ function update(dt) {
   player.x =
     clamp(
       player.x,
-      150,
-      WORLD.width - 150
+      700,
+      1500
     );
+
 
   player.y =
     clamp(
       player.y,
-      200,
+      350,
       WORLD.height - 100
     );
 
+
+  /*
+     camera follow
+  */
 
   camera.x +=
     (
       player.x -
       camera.x
-    ) * .075;
+    ) *
+    .075;
+
 
   camera.y +=
     (
       player.y -
       camera.y
-    ) * .075;
+    ) *
+    .07;
 
 }
 
@@ -327,74 +439,153 @@ function update(dt) {
 
 function drawSky() {
 
-  const g =
+  const gradient =
     ctx.createLinearGradient(
       0,
       0,
       0,
-      VH
+      H
     );
 
-  g.addColorStop(
+
+  gradient.addColorStop(
     0,
-    "#9fc6d5"
+    "#8ebdce"
   );
 
-  g.addColorStop(
+
+  gradient.addColorStop(
     .35,
-    "#d2d8ce"
+    "#c5d6d5"
   );
 
-  g.addColorStop(
+
+  gradient.addColorStop(
+    .58,
+    "#d6d8cc"
+  );
+
+
+  gradient.addColorStop(
     1,
-    "#b9bcb1"
+    "#a5aaa1"
   );
 
-  ctx.fillStyle = g;
+
+  ctx.fillStyle =
+    gradient;
+
 
   ctx.fillRect(
     0,
     0,
-    VW,
-    VH
+    W,
+    H
   );
 
 }
 
 
 /* ==========================================================
-   DISTANT SKYLINE
+   CLOUDS / HAZE
 ========================================================== */
 
-function drawSkyline() {
+function drawClouds(time) {
+
+  ctx.save();
+
+  ctx.globalAlpha =
+    .15;
+
+
+  for (
+    let i = 0;
+    i < 8;
+    i++
+  ) {
+
+    const x =
+      (
+        i * 240 +
+        time * .006
+      ) %
+      (
+        W + 300
+      ) -
+      150;
+
+
+    const y =
+      80 +
+      noise(i*7) *
+      140;
+
+
+    ctx.fillStyle =
+      "#ffffff";
+
+
+    ctx.beginPath();
+
+    ctx.ellipse(
+      x,
+      y,
+      110,
+      28,
+      0,
+      0,
+      Math.PI*2
+    );
+
+    ctx.fill();
+
+  }
+
+  ctx.restore();
+
+}
+
+
+/* ==========================================================
+   DISTANT HANGZHOU SKYLINE
+========================================================== */
+
+function drawDistantSkyline() {
 
   const base =
-    360;
+    VIEW.horizon + 150;
 
-  const buildings = [
 
-    [0,170,95],
-    [85,220,80],
-    [160,145,70],
-    [225,260,110],
-    [330,190,80],
-    [410,300,105],
-    [510,230,85],
-    [590,160,70],
-    [655,340,115],
-    [770,215,80],
-    [850,280,100],
-    [950,190,70],
-    [1010,330,110],
-    [1120,240,80],
-    [1200,180,70],
-    [1270,350,120],
-    [1390,260,85],
-    [1470,200,70],
-    [1540,315,105],
-    [1645,220,80],
-    [1725,270,95],
-    [1820,185,75]
+  const towers = [
+
+    [-80,170,75],
+    [10,230,80],
+    [105,150,65],
+    [180,300,95],
+    [290,210,72],
+
+    [380,350,105],
+    [500,190,75],
+    [585,280,90],
+
+    [690,390,110],
+    [815,220,75],
+
+    [900,320,100],
+    [1015,180,70],
+
+    [1090,420,115],
+
+    [1220,270,90],
+    [1320,205,75],
+
+    [1410,360,110],
+    [1530,230,82],
+
+    [1625,315,95],
+    [1740,190,70],
+
+    [1815,270,85]
 
   ];
 
@@ -402,91 +593,66 @@ function drawSkyline() {
   ctx.save();
 
   ctx.globalAlpha =
-    .34;
+    .43;
 
 
-  buildings.forEach(
-    (b,i) => {
+  towers.forEach(
+    (b,index) => {
 
-      let x =
+      const x =
+        b[0] /
+        1900 *
         (
-          b[0] %
-          (VW + 200)
-        ) - 50;
+          W + 200
+        );
 
-      const h =
+
+      const height =
         b[1];
 
-      const w =
+
+      const width =
         b[2];
 
 
       ctx.fillStyle =
-        i % 3 === 0
+        index % 3 === 0
         ?
-        "#617783"
+        "#58737d"
         :
-        "#6e8087";
+        "#6e858b";
 
 
       ctx.fillRect(
         x,
-        base-h,
-        w,
-        h
+        base-height,
+        width,
+        height
       );
 
 
       /*
-        rooftop
+        distant windows
       */
 
-      if (
-        i % 4 === 0
-      ) {
-
-        ctx.fillRect(
-          x+w*.43,
-          base-h-35,
-          w*.14,
-          35
-        );
-
-      }
-
-
-      /*
-        window lines
-      */
-
-      ctx.strokeStyle =
-        "rgba(225,235,236,.25)";
-
-      ctx.lineWidth =
-        1;
+      ctx.fillStyle =
+        "rgba(216,229,226,.18)";
 
 
       for (
         let yy =
-          base-h+15;
+          base-height+15;
         yy <
-          base-10;
+          base-15;
         yy += 18
       ) {
 
-        ctx.beginPath();
-
-        ctx.moveTo(
+        ctx.fillRect(
           x+8,
-          yy
+          yy,
+          width-16,
+          2
         );
-
-        ctx.lineTo(
-          x+w-8,
-          yy
-        );
-
-        ctx.stroke();
 
       }
 
@@ -498,90 +664,149 @@ function drawSkyline() {
 
 
   /*
-    haze
+    atmospheric haze
   */
 
   const haze =
     ctx.createLinearGradient(
       0,
-      170,
+      80,
       0,
-      430
+      390
     );
 
 
   haze.addColorStop(
     0,
-    "rgba(225,233,229,.05)"
+    "rgba(225,237,234,.05)"
   );
+
+
+  haze.addColorStop(
+    .65,
+    "rgba(225,237,234,.18)"
+  );
+
 
   haze.addColorStop(
     1,
-    "rgba(225,233,229,.7)"
+    "rgba(225,237,234,.65)"
   );
 
 
   ctx.fillStyle =
     haze;
 
+
   ctx.fillRect(
     0,
-    150,
-    VW,
-    300
+    60,
+    W,
+    350
   );
 
 }
 
 
 /* ==========================================================
-   WORLD GROUND
-========================================================== */
+   ROAD GEOMETRY
 
-function drawGround() {
-
-  const p =
-    screen(0,0);
-
-
-  ctx.fillStyle =
-    "#a7a9a2";
-
-  ctx.fillRect(
-    p.x,
-    p.y,
-    WORLD.width,
-    WORLD.height
-  );
-
-}
-
-
-/* ==========================================================
-   ROAD
+   道路そのものを
+   台形として描く。
 ========================================================== */
 
 const road = {
 
-  left: 870,
-  right: 1730
+  center:
+    1100,
+
+  halfWidth:
+    330
 
 };
 
 
+/* ==========================================================
+   ROAD QUAD
+========================================================== */
+
 function drawRoad() {
 
-  const top =
-    screen(
-      road.left,
-      0
+  const farY =
+    camera.y -
+    1500;
+
+
+  const nearY =
+    camera.y +
+    950;
+
+
+  const farLeft =
+    project(
+      road.center -
+      road.halfWidth,
+      farY
     );
 
-  const bottom =
-    screen(
-      road.right,
-      WORLD.height
+
+  const farRight =
+    project(
+      road.center +
+      road.halfWidth,
+      farY
     );
+
+
+  const nearLeft =
+    project(
+      road.center -
+      road.halfWidth,
+      nearY
+    );
+
+
+  const nearRight =
+    project(
+      road.center +
+      road.halfWidth,
+      nearY
+    );
+
+
+  /*
+    sidewalk background
+  */
+
+  ctx.fillStyle =
+    "#aaa99f";
+
+
+  ctx.beginPath();
+
+  ctx.moveTo(
+    farLeft.x - 220,
+    farLeft.y
+  );
+
+  ctx.lineTo(
+    farRight.x + 220,
+    farRight.y
+  );
+
+  ctx.lineTo(
+    nearRight.x + 450,
+    nearRight.y
+  );
+
+  ctx.lineTo(
+    nearLeft.x - 450,
+    nearLeft.y
+  );
+
+  ctx.closePath();
+
+  ctx.fill();
 
 
   /*
@@ -589,214 +814,196 @@ function drawRoad() {
   */
 
   ctx.fillStyle =
-    "#4e5355";
+    "#4c5153";
 
-  ctx.fillRect(
-    top.x,
-    top.y,
-    road.right-road.left,
-    WORLD.height
+
+  ctx.beginPath();
+
+  ctx.moveTo(
+    farLeft.x,
+    farLeft.y
   );
+
+  ctx.lineTo(
+    farRight.x,
+    farRight.y
+  );
+
+  ctx.lineTo(
+    nearRight.x,
+    nearRight.y
+  );
+
+  ctx.lineTo(
+    nearLeft.x,
+    nearLeft.y
+  );
+
+  ctx.closePath();
+
+  ctx.fill();
 
 
   /*
-    asphalt texture
+    asphalt grain
   */
 
   for (
     let i=0;
-    i<700;
+    i<280;
     i++
   ) {
 
-    const x =
-      road.left +
-      noise(i*5) *
-      (
-        road.right -
-        road.left
-      );
-
     const y =
-      noise(i*11) *
-      WORLD.height;
+      camera.y -
+      1300 +
+      noise(i*17) *
+      2200;
 
 
-    if (
-      !visible(x,y,20)
-    ) continue;
+    const x =
+      road.center -
+      road.halfWidth +
+      noise(i*29) *
+      road.halfWidth*2;
 
 
     const p =
-      screen(x,y);
+      project(x,y);
+
+
+    if (
+      p.y < 250 ||
+      p.y > H+40
+    ) continue;
 
 
     ctx.fillStyle =
-      i % 2
+      i%2
       ?
       "rgba(255,255,255,.035)"
       :
-      "rgba(0,0,0,.035)";
+      "rgba(0,0,0,.045)";
+
+
+    const size =
+      1.5 *
+      p.scale;
 
 
     ctx.fillRect(
       p.x,
       p.y,
-      2,
-      2
+      size,
+      size
     );
 
   }
-
-
-  /*
-    road borders
-  */
-
-  drawRoadLine(
-    road.left + 25,
-    "#e8e5d8",
-    5
-  );
-
-  drawRoadLine(
-    road.right - 25,
-    "#e8e5d8",
-    5
-  );
-
-
-  /*
-    lane markings
-  */
-
-  for (
-    const lane of [
-      1080,
-      1300,
-      1520
-    ]
-  ) {
-
-    for (
-      let y=100;
-      y<WORLD.height;
-      y+=120
-    ) {
-
-      const p =
-        screen(
-          lane,
-          y
-        );
-
-
-      ctx.fillStyle =
-        "#dddccf";
-
-      ctx.fillRect(
-        p.x-3,
-        p.y,
-        6,
-        58
-      );
-
-    }
-
-  }
-
-}
-
-
-function drawRoadLine(
-  x,
-  color,
-  width
-) {
-
-  const p =
-    screen(x,0);
-
-
-  ctx.fillStyle =
-    color;
-
-
-  ctx.fillRect(
-    p.x-width/2,
-    p.y,
-    width,
-    WORLD.height
-  );
 
 }
 
 
 /* ==========================================================
-   SIDEWALKS
+   ROAD MARKINGS
 ========================================================== */
 
-function drawSidewalk() {
+function drawLaneMarkings() {
 
-  drawOneSidewalk(
-    550,
-    road.left
-  );
+  const lanes = [
 
-  drawOneSidewalk(
-    road.right,
-    2050
-  );
+    road.center - 110,
+    road.center + 110
 
-}
+  ];
 
 
-function drawOneSidewalk(
-  left,
-  right
-) {
+  lanes.forEach(
+    laneX => {
 
-  const p =
-    screen(
-      left,
-      0
-    );
+      for (
+        let y =
+          camera.y - 1500;
+        y <
+          camera.y + 1000;
+        y += 150
+      ) {
+
+        const a =
+          project(
+            laneX,
+            y
+          );
 
 
-  ctx.fillStyle =
-    "#c5c4bc";
+        const b =
+          project(
+            laneX,
+            y + 70
+          );
 
 
-  ctx.fillRect(
-    p.x,
-    p.y,
-    right-left,
-    WORLD.height
+        ctx.strokeStyle =
+          "rgba(238,237,225,.88)";
+
+
+        ctx.lineWidth =
+          Math.max(
+            2,
+            5*a.scale
+          );
+
+
+        ctx.beginPath();
+
+        ctx.moveTo(
+          a.x,
+          a.y
+        );
+
+        ctx.lineTo(
+          b.x,
+          b.y
+        );
+
+        ctx.stroke();
+
+      }
+
+    }
   );
 
 
   /*
-     paving slabs
+     road edges
   */
 
-  ctx.strokeStyle =
-    "rgba(95,96,91,.17)";
-
-  ctx.lineWidth =
-    1;
-
-
   for (
-    let y=0;
-    y<WORLD.height;
-    y+=42
+    const x of [
+      road.center-road.halfWidth+20,
+      road.center+road.halfWidth-20
+    ]
   ) {
 
     const a =
-      screen(left,y);
+      project(
+        x,
+        camera.y-1500
+      );
+
 
     const b =
-      screen(right,y);
+      project(
+        x,
+        camera.y+1000
+      );
+
+
+    ctx.strokeStyle =
+      "rgba(240,239,229,.9)";
+
+
+    ctx.lineWidth =
+      5;
 
 
     ctx.beginPath();
@@ -815,121 +1022,155 @@ function drawOneSidewalk(
 
   }
 
+}
+
+
+/* ==========================================================
+   SIDEWALK TILES
+========================================================== */
+
+function drawSidewalkDetails() {
 
   for (
-    let x=left;
-    x<right;
-    x+=48
+    let y =
+      camera.y - 1400;
+    y <
+      camera.y + 1000;
+    y += 65
   ) {
 
-    const a =
-      screen(x,0);
+    const leftA =
+      project(
+        road.center-road.halfWidth-210,
+        y
+      );
+
+
+    const leftB =
+      project(
+        road.center-road.halfWidth,
+        y
+      );
+
+
+    const rightA =
+      project(
+        road.center+road.halfWidth,
+        y
+      );
+
+
+    const rightB =
+      project(
+        road.center+road.halfWidth+210,
+        y
+      );
+
+
+    ctx.strokeStyle =
+      "rgba(74,77,73,.16)";
+
+
+    ctx.lineWidth =
+      Math.max(
+        .5,
+        leftA.scale
+      );
 
 
     ctx.beginPath();
 
     ctx.moveTo(
-      a.x,
-      a.y
+      leftA.x,
+      leftA.y
     );
 
     ctx.lineTo(
-      a.x,
-      a.y+WORLD.height
+      leftB.x,
+      leftB.y
+    );
+
+    ctx.stroke();
+
+
+    ctx.beginPath();
+
+    ctx.moveTo(
+      rightA.x,
+      rightA.y
+    );
+
+    ctx.lineTo(
+      rightB.x,
+      rightB.y
     );
 
     ctx.stroke();
 
   }
 
-
-  /*
-     curb
-  */
-
-  const curb =
-    right === road.left
-    ?
-    right-10
-    :
-    left;
-
-
-  const c =
-    screen(
-      curb,
-      0
-    );
-
-
-  ctx.fillStyle =
-    "#deddd4";
-
-
-  ctx.fillRect(
-    c.x,
-    c.y,
-    10,
-    WORLD.height
-  );
-
 }
 
 
 /* ==========================================================
-   YELLOW TACTILE PAVING
+   TACTILE PAVING
 ========================================================== */
 
 function drawTactilePaving() {
 
   for (
     const x of [
-      810,
-      1790
+      road.center-road.halfWidth-80,
+      road.center+road.halfWidth+80
     ]
   ) {
 
-    const p =
-      screen(x,0);
-
-
-    ctx.fillStyle =
-      "#d5b34c";
-
-
-    ctx.fillRect(
-      p.x-8,
-      p.y,
-      16,
-      WORLD.height
-    );
-
-
     for (
-      let y=0;
-      y<WORLD.height;
-      y+=12
+      let y =
+        camera.y-1400;
+      y <
+        camera.y+950;
+      y += 25
     ) {
 
-      const q =
-        screen(x,y);
+      const a =
+        project(
+          x,
+          y
+        );
 
 
-      ctx.fillStyle =
-        "rgba(107,86,27,.25)";
+      const b =
+        project(
+          x,
+          y+28
+        );
+
+
+      ctx.strokeStyle =
+        "#d3ae42";
+
+
+      ctx.lineWidth =
+        Math.max(
+          3,
+          11*a.scale
+        );
 
 
       ctx.beginPath();
 
-      ctx.arc(
-        q.x,
-        q.y,
-        1.5,
-        0,
-        Math.PI*2
+      ctx.moveTo(
+        a.x,
+        a.y
       );
 
-      ctx.fill();
+      ctx.lineTo(
+        b.x,
+        b.y
+      );
+
+      ctx.stroke();
 
     }
 
@@ -943,155 +1184,172 @@ function drawTactilePaving() {
 ========================================================== */
 
 function drawCrosswalk(
-  y
+  worldY
 ) {
 
-  const start =
-    road.left + 30;
-
-  const width =
-    road.right -
-    road.left -
-    60;
-
-
   for (
-    let x=start;
-    x<start+width;
-    x+=48
+    let x =
+      road.center-road.halfWidth+25;
+    x <
+      road.center+road.halfWidth-20;
+    x += 55
   ) {
 
-    const p =
-      screen(
+    const a =
+      project(
         x,
-        y
+        worldY
+      );
+
+
+    const b =
+      project(
+        x+34,
+        worldY+105
+      );
+
+
+    const c =
+      project(
+        x+34,
+        worldY
+      );
+
+
+    const d =
+      project(
+        x,
+        worldY+105
       );
 
 
     ctx.fillStyle =
-      "rgba(235,235,226,.88)";
+      "rgba(235,235,226,.9)";
 
 
-    ctx.fillRect(
-      p.x,
-      p.y,
-      30,
-      115
+    ctx.beginPath();
+
+    ctx.moveTo(
+      a.x,
+      a.y
     );
+
+    ctx.lineTo(
+      c.x,
+      c.y
+    );
+
+    ctx.lineTo(
+      b.x,
+      b.y
+    );
+
+    ctx.lineTo(
+      d.x,
+      d.y
+    );
+
+    ctx.closePath();
+
+    ctx.fill();
 
   }
-
-
-  /*
-    stop line
-  */
-
-  const line =
-    screen(
-      road.left,
-      y-28
-    );
-
-
-  ctx.fillStyle =
-    "#e7e6dc";
-
-
-  ctx.fillRect(
-    line.x,
-    line.y,
-    road.right-road.left,
-    7
-  );
 
 }
 
 
 /* ==========================================================
-   BUILDINGS
+   CITY BUILDINGS
 ========================================================== */
 
-const cityBuildings = [
+const buildings = [
 
   {
-    x:70,
-    y:2080,
-    w:450,
-    h:360,
-    floors:8,
-    name:"杭州书房",
-    type:"stone"
+    side:-1,
+    x:570,
+    y:3250,
+    width:390,
+    height:520,
+    depth:170,
+    type:"glass",
+    name:"杭州中心"
   },
 
   {
-    x:100,
-    y:1510,
-    w:420,
-    h:430,
-    floors:11,
-    name:"杭城中心",
-    type:"glass"
+    side:1,
+    x:1630,
+    y:3170,
+    width:420,
+    height:590,
+    depth:190,
+    type:"dark",
+    name:"HANGZHOU"
   },
 
   {
-    x:40,
-    y:870,
-    w:480,
-    h:520,
-    floors:14,
-    name:"HANGZHOU",
-    type:"glass"
+    side:-1,
+    x:530,
+    y:2600,
+    width:430,
+    height:660,
+    depth:180,
+    type:"silver",
+    name:"钱江商务"
   },
 
   {
-    x:90,
-    y:250,
-    w:430,
-    h:480,
-    floors:12,
-    name:"",
-    type:"office"
-  },
-
-
-  {
-    x:2080,
-    y:2070,
-    w:450,
-    h:370,
-    floors:9,
-    name:"茶 · COFFEE",
-    type:"stone"
+    side:1,
+    x:1650,
+    y:2470,
+    width:430,
+    height:720,
+    depth:190,
+    type:"glass",
+    name:"城市广场"
   },
 
   {
-    x:2080,
-    y:1480,
-    w:450,
-    h:450,
-    floors:12,
-    name:"杭州中心",
-    type:"glass"
+    side:-1,
+    x:550,
+    y:1850,
+    width:420,
+    height:760,
+    depth:170,
+    type:"dark",
+    name:""
   },
 
   {
-    x:2070,
-    y:850,
-    w:470,
-    h:520,
-    floors:15,
-    name:"",
-    type:"office"
+    side:1,
+    x:1640,
+    y:1700,
+    width:440,
+    height:820,
+    depth:200,
+    type:"silver",
+    name:""
   },
 
   {
-    x:2090,
-    y:220,
-    w:430,
-    h:500,
-    floors:13,
-    name:"",
-    type:"glass"
+    side:-1,
+    x:590,
+    y:1100,
+    width:390,
+    height:840,
+    depth:170,
+    type:"glass",
+    name:""
+  },
+
+  {
+    side:1,
+    x:1620,
+    y:900,
+    width:420,
+    height:900,
+    depth:180,
+    type:"dark",
+    name:""
   }
 
 ];
@@ -1099,64 +1357,97 @@ const cityBuildings = [
 
 /* ==========================================================
    BUILDING DRAW
+
+   今回は
+   正面
+   側面
+   屋上
+   の3面を描画する
 ========================================================== */
 
 function drawBuilding(b) {
 
-  if (
-    !visible(
-      b.x+b.w/2,
-      b.y,
-      700
-    )
-  ) return;
-
-
-  const p =
-    screen(
+  const base =
+    project(
       b.x,
       b.y
     );
 
 
-  const x=p.x;
-  const y=p.y;
+  if (
+    base.y < -700 ||
+    base.y > H+600
+  ) return;
 
-  const visualHeight =
-    Math.min(
-      b.h,
-      430
+
+  const s =
+    base.scale;
+
+
+  const width =
+    b.width * s;
+
+
+  const height =
+    b.height * s;
+
+
+  const depthX =
+    b.side *
+    b.depth *
+    .42 *
+    s;
+
+
+  const depthY =
+    -b.depth *
+    .18 *
+    s;
+
+
+  const x =
+    base.x -
+    (
+      b.side < 0
+      ?
+      width
+      :
+      0
     );
 
 
+  const y =
+    base.y;
+
+
   /*
-    building shadow
+     ground shadow
   */
 
   ctx.fillStyle =
-    "rgba(25,35,38,.19)";
+    "rgba(20,31,34,.18)";
 
 
   ctx.beginPath();
 
   ctx.moveTo(
-    x+30,
-    y+80
+    x,
+    y
   );
 
   ctx.lineTo(
-    x+b.w+75,
-    y+130
+    x+width,
+    y
   );
 
   ctx.lineTo(
-    x+b.w+75,
-    y+visualHeight+70
+    x+width+90*s,
+    y+35*s
   );
 
   ctx.lineTo(
-    x+30,
-    y+visualHeight+20
+    x+70*s,
+    y+40*s
   );
 
   ctx.closePath();
@@ -1165,104 +1456,147 @@ function drawBuilding(b) {
 
 
   /*
-    facade
+     front facade
   */
 
-  let facade;
+  let frontColor;
 
 
   if (
     b.type === "glass"
   ) {
 
-    facade =
-      ctx.createLinearGradient(
-        x,
-        y,
-        x+b.w,
-        y
-      );
-
-
-    facade.addColorStop(
-      0,
-      "#66838d"
-    );
-
-    facade.addColorStop(
-      .45,
-      "#9ab1b5"
-    );
-
-    facade.addColorStop(
-      .7,
-      "#55747f"
-    );
-
-    facade.addColorStop(
-      1,
-      "#78929a"
-    );
+    frontColor =
+      "#63808a";
 
   }
 
   else if (
-    b.type === "stone"
+    b.type === "dark"
   ) {
 
-    facade =
-      "#b5afa3";
+    frontColor =
+      "#46575c";
 
   }
 
   else {
 
-    facade =
-      "#8b9696";
+    frontColor =
+      "#7d898b";
 
   }
 
 
   ctx.fillStyle =
-    facade;
+    frontColor;
 
 
   ctx.fillRect(
     x,
-    y-visualHeight,
-    b.w,
-    visualHeight
+    y-height,
+    width,
+    height
   );
 
 
   /*
-    side face
+     side wall
   */
 
   ctx.fillStyle =
-    "rgba(52,65,67,.35)";
+    b.side < 0
+    ?
+    "#394c53"
+    :
+    "#53676c";
+
+
+  ctx.beginPath();
+
+  if (
+    b.side < 0
+  ) {
+
+    ctx.moveTo(
+      x,
+      y-height
+    );
+
+    ctx.lineTo(
+      x+depthX,
+      y-height+depthY
+    );
+
+    ctx.lineTo(
+      x+depthX,
+      y+depthY
+    );
+
+    ctx.lineTo(
+      x,
+      y
+    );
+
+  }
+
+  else {
+
+    ctx.moveTo(
+      x+width,
+      y-height
+    );
+
+    ctx.lineTo(
+      x+width+depthX,
+      y-height+depthY
+    );
+
+    ctx.lineTo(
+      x+width+depthX,
+      y+depthY
+    );
+
+    ctx.lineTo(
+      x+width,
+      y
+    );
+
+  }
+
+  ctx.closePath();
+
+  ctx.fill();
+
+
+  /*
+     rooftop
+  */
+
+  ctx.fillStyle =
+    "#78888a";
 
 
   ctx.beginPath();
 
   ctx.moveTo(
-    x+b.w,
-    y-visualHeight
+    x,
+    y-height
   );
 
   ctx.lineTo(
-    x+b.w+35,
-    y-visualHeight+25
+    x+width,
+    y-height
   );
 
   ctx.lineTo(
-    x+b.w+35,
-    y+25
+    x+width+depthX,
+    y-height+depthY
   );
 
   ctx.lineTo(
-    x+b.w,
-    y
+    x+depthX,
+    y-height+depthY
   );
 
   ctx.closePath();
@@ -1271,91 +1605,53 @@ function drawBuilding(b) {
 
 
   /*
-    windows
+     horizontal floor lines
   */
 
-  const floorHeight =
-    visualHeight /
-    b.floors;
+  const floors =
+    Math.max(
+      8,
+      Math.floor(
+        b.height / 48
+      )
+    );
 
 
   for (
-    let floor=0;
-    floor<b.floors;
+    let floor=1;
+    floor<floors;
     floor++
   ) {
 
-    const yy =
+    const fy =
       y -
-      visualHeight +
+      height +
       floor *
-      floorHeight;
-
-
-    for (
-      let xx=16;
-      xx<b.w-12;
-      xx+=39
-    ) {
-
-      const seed =
-        b.x +
-        floor*77 +
-        xx;
-
-
-      if (
-        b.type === "glass"
-      ) {
-
-        ctx.fillStyle =
-          noise(seed) > .73
-          ?
-          "rgba(213,227,218,.65)"
-          :
-          "rgba(38,66,75,.48)";
-
-      }
-
-      else {
-
-        ctx.fillStyle =
-          noise(seed) > .8
-          ?
-          "#d8c99a"
-          :
-          "#53666a";
-
-      }
-
-
-      ctx.fillRect(
-        x+xx,
-        yy+8,
-        28,
-        Math.max(
-          8,
-          floorHeight-15
-        )
-      );
-
-    }
+      height /
+      floors;
 
 
     ctx.strokeStyle =
-      "rgba(255,255,255,.13)";
+      "rgba(225,238,238,.18)";
+
+
+    ctx.lineWidth =
+      Math.max(
+        .7,
+        1.2*s
+      );
 
 
     ctx.beginPath();
 
     ctx.moveTo(
       x,
-      yy
+      fy
     );
 
     ctx.lineTo(
-      x+b.w,
-      yy
+      x+width,
+      fy
     );
 
     ctx.stroke();
@@ -1364,31 +1660,51 @@ function drawBuilding(b) {
 
 
   /*
-    vertical facade lines
+     vertical window columns
   */
 
-  ctx.strokeStyle =
-    "rgba(28,48,53,.25)";
-
-  ctx.lineWidth =
-    2;
+  const columns =
+    Math.max(
+      5,
+      Math.floor(
+        b.width / 48
+      )
+    );
 
 
   for (
-    let xx=0;
-    xx<b.w;
-    xx+=78
+    let column=1;
+    column<columns;
+    column++
   ) {
+
+    const fx =
+      x +
+      column *
+      width /
+      columns;
+
+
+    ctx.strokeStyle =
+      "rgba(30,52,58,.36)";
+
+
+    ctx.lineWidth =
+      Math.max(
+        1,
+        2*s
+      );
+
 
     ctx.beginPath();
 
     ctx.moveTo(
-      x+xx,
-      y-visualHeight
+      fx,
+      y-height
     );
 
     ctx.lineTo(
-      x+xx,
+      fx,
       y
     );
 
@@ -1398,86 +1714,275 @@ function drawBuilding(b) {
 
 
   /*
-    roof equipment
+     random illuminated windows
+  */
+
+  for (
+    let floor=1;
+    floor<floors-1;
+    floor++
+  ) {
+
+    for (
+      let column=0;
+      column<columns;
+      column++
+    ) {
+
+      const seed =
+        b.x +
+        b.y +
+        floor*37 +
+        column*71;
+
+
+      if (
+        noise(seed) < .78
+      ) continue;
+
+
+      const cellW =
+        width /
+        columns;
+
+
+      const cellH =
+        height /
+        floors;
+
+
+      ctx.fillStyle =
+        "rgba(221,220,176,.22)";
+
+
+      ctx.fillRect(
+        x +
+        column*cellW +
+        cellW*.18,
+
+        y -
+        height +
+        floor*cellH +
+        cellH*.18,
+
+        cellW*.64,
+
+        cellH*.55
+      );
+
+    }
+
+  }
+
+
+  /*
+     glass reflection
+  */
+
+  if (
+    b.type === "glass"
+  ) {
+
+    const reflection =
+      ctx.createLinearGradient(
+        x,
+        y-height,
+        x+width,
+        y
+      );
+
+
+    reflection.addColorStop(
+      0,
+      "rgba(210,236,238,.23)"
+    );
+
+
+    reflection.addColorStop(
+      .4,
+      "rgba(210,236,238,.02)"
+    );
+
+
+    reflection.addColorStop(
+      .65,
+      "rgba(255,255,255,.14)"
+    );
+
+
+    reflection.addColorStop(
+      1,
+      "rgba(255,255,255,0)"
+    );
+
+
+    ctx.fillStyle =
+      reflection;
+
+
+    ctx.fillRect(
+      x,
+      y-height,
+      width,
+      height
+    );
+
+  }
+
+
+  /*
+     rooftop equipment
   */
 
   ctx.fillStyle =
-    "#697475";
+    "#566568";
 
 
   ctx.fillRect(
-    x+b.w*.2,
-    y-visualHeight-17,
-    60,
-    17
+    x +
+    width*.2 +
+    depthX*.15,
+
+    y -
+    height -
+    17*s +
+    depthY*.4,
+
+    width*.17,
+
+    17*s
   );
 
 
   ctx.fillRect(
-    x+b.w*.68,
-    y-visualHeight-25,
-    45,
-    25
+    x +
+    width*.64,
+
+    y -
+    height -
+    25*s +
+    depthY*.2,
+
+    width*.13,
+
+    25*s
   );
 
 
   /*
-    entrance
+     ground floor
   */
 
-  const entranceW =
-    115;
+  const groundH =
+    85*s;
 
 
   ctx.fillStyle =
-    "#30484e";
+    "#263c42";
 
 
   ctx.fillRect(
-    x+b.w/2-entranceW/2,
-    y-72,
-    entranceW,
-    72
-  );
-
-
-  ctx.strokeStyle =
-    "#b7c3c0";
-
-
-  ctx.beginPath();
-
-  ctx.moveTo(
-    x+b.w/2,
-    y-70
-  );
-
-  ctx.lineTo(
-    x+b.w/2,
-    y-3
-  );
-
-  ctx.stroke();
-
-
-  /*
-    canopy
-  */
-
-  ctx.fillStyle =
-    "#414d4f";
-
-
-  ctx.fillRect(
-    x+b.w/2-85,
-    y-80,
-    170,
-    9
+    x,
+    y-groundH,
+    width,
+    groundH
   );
 
 
   /*
-    building name
+     shops
+  */
+
+  const shopCount =
+    Math.max(
+      2,
+      Math.floor(
+        b.width/130
+      )
+    );
+
+
+  for (
+    let i=0;
+    i<shopCount;
+    i++
+  ) {
+
+    const shopW =
+      width /
+      shopCount;
+
+
+    ctx.fillStyle =
+      i%2
+      ?
+      "#405d62"
+      :
+      "#334e54";
+
+
+    ctx.fillRect(
+      x +
+      i*shopW +
+      5*s,
+
+      y -
+      groundH +
+      16*s,
+
+      shopW -
+      10*s,
+
+      groundH -
+      20*s
+    );
+
+
+    /*
+       warm shop interior
+    */
+
+    ctx.fillStyle =
+      "rgba(230,203,139,.32)";
+
+
+    ctx.fillRect(
+      x +
+      i*shopW +
+      11*s,
+
+      y -
+      groundH +
+      22*s,
+
+      shopW -
+      22*s,
+
+      groundH -
+      34*s
+    );
+
+  }
+
+
+  /*
+     canopy
+  */
+
+  ctx.fillStyle =
+    "#26383c";
+
+
+  ctx.fillRect(
+    x-8*s,
+    y-groundH,
+    width+16*s,
+    10*s
+  );
+
+
+  /*
+     signage
   */
 
   if (
@@ -1485,11 +1990,15 @@ function drawBuilding(b) {
   ) {
 
     ctx.fillStyle =
-      "rgba(238,242,237,.92)";
+      "rgba(241,242,231,.9)";
 
 
     ctx.font =
-      "16px sans-serif";
+      `${Math.max(
+        10,
+        16*s
+      )}px sans-serif`;
+
 
     ctx.textAlign =
       "center";
@@ -1497,8 +2006,8 @@ function drawBuilding(b) {
 
     ctx.fillText(
       b.name,
-      x+b.w/2,
-      y-102
+      x+width/2,
+      y-groundH-14*s
     );
 
   }
@@ -1507,72 +2016,38 @@ function drawBuilding(b) {
 
 
 /* ==========================================================
-   STREET TREES
+   STREET TREE
 ========================================================== */
 
-const streetTrees=[];
-
-
-for (
-  let y=300;
-  y<2850;
-  y+=260
+function drawTree(
+  x,
+  y
 ) {
 
-  streetTrees.push({
-    x:720,
-    y:y
-  });
-
-  streetTrees.push({
-    x:1880,
-    y:y+110
-  });
-
-}
-
-
-function drawStreetTree(t) {
-
   const p =
-    screen(
-      t.x,
-      t.y
-    );
+    project(x,y);
+
+
+  const s =
+    p.scale;
 
 
   /*
-    pavement opening
+     tree pit
   */
 
   ctx.fillStyle =
-    "#6d7169";
-
-
-  ctx.fillRect(
-    p.x-25,
-    p.y-10,
-    50,
-    25
-  );
-
-
-  /*
-    shadow
-  */
-
-  ctx.fillStyle =
-    "rgba(28,42,31,.17)";
+    "#6b7169";
 
 
   ctx.beginPath();
 
   ctx.ellipse(
-    p.x+20,
-    p.y+8,
-    45,
-    13,
-    .15,
+    p.x,
+    p.y,
+    27*s,
+    10*s,
+    0,
     0,
     Math.PI*2
   );
@@ -1581,14 +2056,38 @@ function drawStreetTree(t) {
 
 
   /*
-    trunk
+     shadow
+  */
+
+  ctx.fillStyle =
+    "rgba(24,42,30,.18)";
+
+
+  ctx.beginPath();
+
+  ctx.ellipse(
+    p.x+25*s,
+    p.y+5*s,
+    55*s,
+    14*s,
+    .1,
+    0,
+    Math.PI*2
+  );
+
+  ctx.fill();
+
+
+  /*
+     trunk
   */
 
   ctx.strokeStyle =
-    "#665744";
+    "#625442";
+
 
   ctx.lineWidth =
-    10;
+    10*s;
 
 
   ctx.beginPath();
@@ -1600,43 +2099,49 @@ function drawStreetTree(t) {
 
   ctx.lineTo(
     p.x,
-    p.y-67
+    p.y-75*s
   );
 
   ctx.stroke();
 
 
   /*
-    crown
+     crown
   */
 
   const leaves = [
 
-    [-23,-79,28],
-    [8,-91,34],
-    [34,-74,25],
-    [-5,-62,31]
+    [-30,-90,31],
+    [4,-105,37],
+    [38,-88,29],
+    [-8,-73,34],
+    [23,-120,25]
 
   ];
 
 
   leaves.forEach(
-    (l,i) => {
+    (leaf,index) => {
 
       ctx.fillStyle =
-        i%2
+        index%2
         ?
-        "#557451"
+        "#557653"
         :
-        "#63805a";
+        "#66835b";
 
 
       ctx.beginPath();
 
       ctx.arc(
-        p.x+l[0],
-        p.y+l[1],
-        l[2],
+        p.x +
+        leaf[0]*s,
+
+        p.y +
+        leaf[1]*s,
+
+        leaf[2]*s,
+
         0,
         Math.PI*2
       );
@@ -1650,34 +2155,67 @@ function drawStreetTree(t) {
 
 
 /* ==========================================================
-   TRAFFIC LIGHT
+   STREET TREES DATA
 ========================================================== */
 
-const trafficLights = [
-
-  [820,1900],
-  [1780,1900],
-  [820,900],
-  [1780,900]
-
-];
+const trees=[];
 
 
-function drawTrafficLight(
+for (
+  let y=500;
+  y<3500;
+  y+=240
+) {
+
+  trees.push({
+
+    x:
+      road.center -
+      road.halfWidth -
+      145,
+
+    y
+
+  });
+
+
+  trees.push({
+
+    x:
+      road.center +
+      road.halfWidth +
+      145,
+
+    y:
+      y+110
+
+  });
+
+}
+
+
+/* ==========================================================
+   LAMP POST
+========================================================== */
+
+function drawLampPost(
   x,
-  y,
-  time
+  y
 ) {
 
   const p =
-    screen(x,y);
+    project(x,y);
+
+  const s =
+    p.scale;
 
 
   ctx.strokeStyle =
-    "#3e4848";
+    "#3c484a";
+
 
   ctx.lineWidth =
-    7;
+    5*s;
 
 
   ctx.beginPath();
@@ -1689,49 +2227,115 @@ function drawTrafficLight(
 
   ctx.lineTo(
     p.x,
-    p.y-95
+    p.y-115*s
   );
 
   ctx.lineTo(
-    p.x+38,
-    p.y-95
+    p.x+28*s,
+    p.y-115*s
   );
 
   ctx.stroke();
 
 
   ctx.fillStyle =
-    "#283234";
+    "#d6d4b5";
+
+
+  ctx.beginPath();
+
+  ctx.ellipse(
+    p.x+32*s,
+    p.y-115*s,
+    10*s,
+    5*s,
+    0,
+    0,
+    Math.PI*2
+  );
+
+  ctx.fill();
+
+}
+
+
+/* ==========================================================
+   TRAFFIC LIGHT
+========================================================== */
+
+function drawTrafficLight(
+  x,
+  y,
+  time
+) {
+
+  const p =
+    project(x,y);
+
+  const s =
+    p.scale;
+
+
+  ctx.strokeStyle =
+    "#3a4547";
+
+
+  ctx.lineWidth =
+    6*s;
+
+
+  ctx.beginPath();
+
+  ctx.moveTo(
+    p.x,
+    p.y
+  );
+
+  ctx.lineTo(
+    p.x,
+    p.y-100*s
+  );
+
+  ctx.lineTo(
+    p.x+45*s,
+    p.y-100*s
+  );
+
+  ctx.stroke();
+
+
+  ctx.fillStyle =
+    "#253034";
 
 
   ctx.fillRect(
-    p.x+25,
-    p.y-111,
-    30,
-    52
+    p.x+32*s,
+    p.y-117*s,
+    30*s,
+    57*s
   );
 
 
-  const cycle =
+  const phase =
     Math.floor(
-      time/5000
+      time/4500
     ) % 2;
 
 
   ctx.fillStyle =
-    cycle
+    phase
     ?
-    "#d94f42"
+    "#d45248"
     :
-    "#523733";
+    "#563a38";
 
 
   ctx.beginPath();
 
   ctx.arc(
-    p.x+40,
-    p.y-98,
-    7,
+    p.x+47*s,
+    p.y-102*s,
+    7*s,
     0,
     Math.PI*2
   );
@@ -1740,19 +2344,19 @@ function drawTrafficLight(
 
 
   ctx.fillStyle =
-    cycle
+    phase
     ?
-    "#30453b"
+    "#30463b"
     :
-    "#4ea65d";
+    "#53a867";
 
 
   ctx.beginPath();
 
   ctx.arc(
-    p.x+40,
-    p.y-75,
-    7,
+    p.x+47*s,
+    p.y-77*s,
+    7*s,
     0,
     Math.PI*2
   );
@@ -1766,43 +2370,46 @@ function drawTrafficLight(
    METRO ENTRANCE
 ========================================================== */
 
-function drawMetroEntrance(
+function drawMetro(
   x,
   y
 ) {
 
   const p =
-    screen(x,y);
+    project(x,y);
+
+  const s =
+    p.scale;
 
 
   /*
-    stairs
+     stairs opening
   */
 
   ctx.fillStyle =
-    "#646c6d";
+    "#4c5659";
 
 
   ctx.beginPath();
 
   ctx.moveTo(
-    p.x-50,
+    p.x-45*s,
     p.y
   );
 
   ctx.lineTo(
-    p.x+50,
+    p.x+45*s,
     p.y
   );
 
   ctx.lineTo(
-    p.x+35,
-    p.y+55
+    p.x+30*s,
+    p.y+55*s
   );
 
   ctx.lineTo(
-    p.x-35,
-    p.y+55
+    p.x-30*s,
+    p.y+55*s
   );
 
   ctx.closePath();
@@ -1810,66 +2417,73 @@ function drawMetroEntrance(
   ctx.fill();
 
 
-  for (
-    let yy=8;
-    yy<50;
-    yy+=8
-  ) {
-
-    ctx.strokeStyle =
-      "rgba(230,230,225,.3)";
-
-
-    ctx.beginPath();
-
-    ctx.moveTo(
-      p.x-45+yy*.2,
-      p.y+yy
-    );
-
-    ctx.lineTo(
-      p.x+45-yy*.2,
-      p.y+yy
-    );
-
-    ctx.stroke();
-
-  }
-
-
   /*
-    entrance frame
+     canopy
   */
 
   ctx.strokeStyle =
-    "#445357";
+    "#53686c";
+
 
   ctx.lineWidth =
-    6;
+    5*s;
 
 
-  ctx.strokeRect(
-    p.x-55,
-    p.y-55,
-    110,
-    58
+  ctx.beginPath();
+
+  ctx.moveTo(
+    p.x-50*s,
+    p.y
+  );
+
+  ctx.lineTo(
+    p.x-50*s,
+    p.y-65*s
+  );
+
+  ctx.lineTo(
+    p.x+50*s,
+    p.y-65*s
+  );
+
+  ctx.lineTo(
+    p.x+50*s,
+    p.y
+  );
+
+  ctx.stroke();
+
+
+  /*
+     glass
+  */
+
+  ctx.fillStyle =
+    "rgba(150,193,201,.18)";
+
+
+  ctx.fillRect(
+    p.x-46*s,
+    p.y-61*s,
+    92*s,
+    57*s
   );
 
 
   /*
-    metro sign
+     metro sign
   */
 
   ctx.fillStyle =
-    "#b63e3d";
+    "#b64242";
 
 
   ctx.beginPath();
 
   ctx.arc(
-    p.x-40,
-    p.y-68,
-    14,
+    p.x-34*s,
+    p.y-78*s,
+    14*s,
     0,
     Math.PI*2
   );
@@ -1878,31 +2492,24 @@ function drawMetroEntrance(
 
 
   ctx.fillStyle =
-    "white";
+    "#fff";
+
 
   ctx.font =
-    "bold 14px sans-serif";
+    `bold ${Math.max(
+      8,
+      13*s
+    )}px sans-serif`;
+
 
   ctx.textAlign =
     "center";
 
+
   ctx.fillText(
     "M",
-    p.x-40,
-    p.y-63
-  );
-
-
-  ctx.fillStyle =
-    "#33454a";
-
-  ctx.font =
-    "11px sans-serif";
-
-  ctx.fillText(
-    "地铁",
-    p.x+5,
-    p.y-65
+    p.x-34*s,
+    p.y-73*s
   );
 
 }
@@ -1912,51 +2519,41 @@ function drawMetroEntrance(
    BIKE
 ========================================================== */
 
-const bikes = [
-
-  [650,2180],
-  [690,2200],
-  [730,2220],
-
-  [1910,1320],
-  [1950,1340],
-
-  [660,650],
-  [700,670]
-
-];
-
-
 function drawBike(
   x,
   y
 ) {
 
   const p =
-    screen(x,y);
+    project(x,y);
+
+  const s =
+    p.scale;
 
 
   ctx.strokeStyle =
-    "#4a5555";
+    "#414d4e";
+
 
   ctx.lineWidth =
-    2;
+    2*s;
 
 
   ctx.beginPath();
 
   ctx.arc(
-    p.x-10,
+    p.x-11*s,
     p.y,
-    7,
+    8*s,
     0,
     Math.PI*2
   );
 
+
   ctx.arc(
-    p.x+12,
+    p.x+13*s,
     p.y,
-    7,
+    8*s,
     0,
     Math.PI*2
   );
@@ -1965,33 +2562,33 @@ function drawBike(
 
 
   ctx.strokeStyle =
-    "#d4b844";
+    "#d4b33f";
 
 
   ctx.beginPath();
 
   ctx.moveTo(
-    p.x-10,
+    p.x-11*s,
     p.y
   );
 
   ctx.lineTo(
     p.x,
-    p.y-12
+    p.y-14*s
   );
 
   ctx.lineTo(
-    p.x+12,
+    p.x+13*s,
     p.y
   );
 
   ctx.lineTo(
-    p.x-2,
+    p.x-2*s,
     p.y
   );
 
   ctx.lineTo(
-    p.x-10,
+    p.x-11*s,
     p.y
   );
 
@@ -2001,134 +2598,36 @@ function drawBike(
 
 
 /* ==========================================================
-   BENCH
+   STREET FURNITURE
 ========================================================== */
 
-const benches = [
-
-  [620,1750],
-  [1940,2350],
-  [620,1100]
-
-];
-
-
-function drawBench(
+function drawBollard(
   x,
   y
 ) {
 
   const p =
-    screen(x,y);
+    project(x,y);
+
+  const s =
+    p.scale;
 
 
   ctx.fillStyle =
-    "#6a5140";
+    "#4d5757";
 
 
-  ctx.fillRect(
-    p.x-28,
-    p.y-15,
-    56,
-    7
+  ctx.beginPath();
+
+  ctx.roundRect(
+    p.x-4*s,
+    p.y-22*s,
+    8*s,
+    24*s,
+    3*s
   );
 
-
-  ctx.fillRect(
-    p.x-28,
-    p.y-5,
-    56,
-    7
-  );
-
-
-  ctx.fillStyle =
-    "#414849";
-
-
-  ctx.fillRect(
-    p.x-23,
-    p.y+2,
-    5,
-    15
-  );
-
-
-  ctx.fillRect(
-    p.x+18,
-    p.y+2,
-    5,
-    15
-  );
-
-}
-
-
-/* ==========================================================
-   MANHOLES
-========================================================== */
-
-function drawManholes() {
-
-  const positions = [
-
-    [1000,1600],
-    [1550,2300],
-    [1200,720],
-    [1450,1150]
-
-  ];
-
-
-  positions.forEach(
-    m => {
-
-      const p =
-        screen(
-          m[0],
-          m[1]
-        );
-
-
-      ctx.fillStyle =
-        "#3f4444";
-
-
-      ctx.beginPath();
-
-      ctx.ellipse(
-        p.x,
-        p.y,
-        19,
-        8,
-        0,
-        0,
-        Math.PI*2
-      );
-
-      ctx.fill();
-
-
-      ctx.strokeStyle =
-        "#656969";
-
-
-      ctx.beginPath();
-
-      ctx.ellipse(
-        p.x,
-        p.y,
-        13,
-        5,
-        0,
-        0,
-        Math.PI*2
-      );
-
-      ctx.stroke();
-
-    }
-  );
+  ctx.fill();
 
 }
 
@@ -2140,35 +2639,35 @@ function drawManholes() {
 const cars = [
 
   {
-    x:1000,
-    y:300,
+    x:900,
+    y:800,
+    speed:105,
     dir:1,
-    speed:80,
-    color:"#d8d9d4"
+    color:"#d8dad6"
   },
 
   {
-    x:1210,
-    y:1800,
+    x:1040,
+    y:2500,
+    speed:125,
     dir:-1,
+    color:"#34434a"
+  },
+
+  {
+    x:1190,
+    y:1500,
     speed:100,
-    color:"#404b50"
-  },
-
-  {
-    x:1430,
-    y:700,
     dir:1,
-    speed:90,
-    color:"#c6c8c5"
+    color:"#bfc5c4"
   },
 
   {
-    x:1630,
-    y:2400,
+    x:1370,
+    y:3200,
+    speed:130,
     dir:-1,
-    speed:110,
-    color:"#596a73"
+    color:"#5d727c"
   }
 
 ];
@@ -2186,24 +2685,22 @@ function updateCars(dt) {
 
 
       if (
-        car.dir > 0 &&
         car.y >
-        WORLD.height+200
+        WORLD.height+300
       ) {
 
-        car.y=-200;
+        car.y=-300;
 
       }
 
 
       if (
-        car.dir < 0 &&
         car.y <
-        -200
+        -300
       ) {
 
         car.y =
-          WORLD.height+200;
+          WORLD.height+300;
 
       }
 
@@ -2213,26 +2710,48 @@ function updateCars(dt) {
 }
 
 
+/* ==========================================================
+   CAR DRAW
+
+   俯瞰車ではなく
+   屋根＋フロント/リアを見せる
+========================================================== */
+
 function drawCar(car) {
 
   const p =
-    screen(
+    project(
       car.x,
       car.y
     );
 
 
+  const s =
+    p.scale;
+
+
+  const w =
+    48*s;
+
+  const h =
+    70*s;
+
+
+  /*
+     shadow
+  */
+
   ctx.fillStyle =
-    "rgba(20,25,25,.22)";
+    "rgba(15,22,23,.23)";
 
 
   ctx.beginPath();
 
   ctx.ellipse(
-    p.x+8,
-    p.y+8,
-    24,
-    9,
+    p.x+8*s,
+    p.y+6*s,
+    30*s,
+    10*s,
     0,
     0,
     Math.PI*2
@@ -2240,6 +2759,10 @@ function drawCar(car) {
 
   ctx.fill();
 
+
+  /*
+     car body
+  */
 
   ctx.fillStyle =
     car.color;
@@ -2248,137 +2771,175 @@ function drawCar(car) {
   ctx.beginPath();
 
   ctx.roundRect(
-    p.x-18,
-    p.y-33,
-    36,
-    58,
-    8
+    p.x-w/2,
+    p.y-h,
+    w,
+    h,
+    9*s
   );
 
   ctx.fill();
 
 
   /*
-    windows
+     cabin
   */
 
   ctx.fillStyle =
-    "#455b63";
+    "#40575f";
 
 
-  ctx.fillRect(
-    p.x-13,
-    p.y-20,
-    26,
-    16
+  ctx.beginPath();
+
+  ctx.moveTo(
+    p.x-w*.32,
+    p.y-h*.73
   );
 
-
-  ctx.fillRect(
-    p.x-13,
-    p.y+5,
-    26,
-    11
+  ctx.lineTo(
+    p.x+w*.32,
+    p.y-h*.73
   );
+
+  ctx.lineTo(
+    p.x+w*.38,
+    p.y-h*.37
+  );
+
+  ctx.lineTo(
+    p.x-w*.38,
+    p.y-h*.37
+  );
+
+  ctx.closePath();
+
+  ctx.fill();
 
 
   /*
-    lights
+     windshield reflection
+  */
+
+  ctx.fillStyle =
+    "rgba(190,221,225,.28)";
+
+
+  ctx.beginPath();
+
+  ctx.moveTo(
+    p.x-w*.28,
+    p.y-h*.69
+  );
+
+  ctx.lineTo(
+    p.x+w*.22,
+    p.y-h*.69
+  );
+
+  ctx.lineTo(
+    p.x-w*.03,
+    p.y-h*.43
+  );
+
+  ctx.lineTo(
+    p.x-w*.30,
+    p.y-h*.43
+  );
+
+  ctx.closePath();
+
+  ctx.fill();
+
+
+  /*
+     lamps
   */
 
   ctx.fillStyle =
     car.dir > 0
     ?
-    "#c7d7bd"
+    "#e0dfb9"
     :
-    "#b84b42";
+    "#b84942";
+
+
+  const lightY =
+    car.dir > 0
+    ?
+    p.y-6*s
+    :
+    p.y-h+5*s;
 
 
   ctx.fillRect(
-    p.x-13,
-    car.dir>0
-      ? p.y+19
-      : p.y-29,
-    7,
-    4
+    p.x-w*.36,
+    lightY,
+    9*s,
+    4*s
   );
 
 
   ctx.fillRect(
-    p.x+6,
-    car.dir>0
-      ? p.y+19
-      : p.y-29,
-    7,
-    4
+    p.x+w*.18,
+    lightY,
+    9*s,
+    4*s
   );
 
 }
 
 
 /* ==========================================================
-   PEOPLE
+   PERSON
 ========================================================== */
-
-const pedestrians = [
-
-  [700,2450,"#526f82"],
-  [1880,2150,"#876354"],
-
-  [680,1880,"#556f57"],
-  [1910,1740,"#6e5772"],
-
-  [710,1280,"#795e4f"],
-  [1870,1080,"#4e6879"],
-
-  [680,520,"#6c6a51"],
-  [1900,480,"#765e68"]
-
-];
-
 
 function drawPerson(
   x,
   y,
   color,
-  playerMode=false
+  isPlayer=false
 ) {
 
   const p =
-    screen(x,y);
+    project(x,y);
+
+  const s =
+    p.scale;
 
 
   let bob=0;
 
 
   if (
-    playerMode &&
+    isPlayer &&
     player.moving
   ) {
 
     bob =
       Math.sin(
         player.step
-      ) * 2;
+      ) *
+      2.2 *
+      s;
 
   }
 
 
   /*
-    shadow
+     shadow
   */
 
   ctx.fillStyle =
-    "rgba(25,30,30,.24)";
+    "rgba(20,27,27,.26)";
 
 
   ctx.beginPath();
 
   ctx.ellipse(
     p.x,
-    p.y+10,
-    14,
-    5,
+    p.y+3*s,
+    15*s,
+    6*s,
     0,
     0,
     Math.PI*2
@@ -2388,31 +2949,31 @@ function drawPerson(
 
 
   /*
-    legs
+     legs
   */
 
   ctx.fillStyle =
-    "#33383a";
+    "#303638";
 
 
   ctx.fillRect(
-    p.x-7,
-    p.y-2+bob,
-    5,
-    16
+    p.x-7*s,
+    p.y-18*s+bob,
+    5*s,
+    19*s
   );
 
 
   ctx.fillRect(
-    p.x+2,
-    p.y-2+bob,
-    5,
-    16
+    p.x+2*s,
+    p.y-18*s+bob,
+    5*s,
+    19*s
   );
 
 
   /*
-    torso
+     torso
   */
 
   ctx.fillStyle =
@@ -2422,30 +2983,30 @@ function drawPerson(
   ctx.beginPath();
 
   ctx.roundRect(
-    p.x-11,
-    p.y-29+bob,
-    22,
-    30,
-    4
+    p.x-12*s,
+    p.y-49*s+bob,
+    24*s,
+    33*s,
+    5*s
   );
 
   ctx.fill();
 
 
   /*
-    head
+     head
   */
 
   ctx.fillStyle =
-    "#d9aa84";
+    "#d7a984";
 
 
   ctx.beginPath();
 
   ctx.arc(
     p.x,
-    p.y-38+bob,
-    9,
+    p.y-60*s+bob,
+    10*s,
     0,
     Math.PI*2
   );
@@ -2454,7 +3015,7 @@ function drawPerson(
 
 
   /*
-    hair
+     hair
   */
 
   ctx.fillStyle =
@@ -2465,8 +3026,8 @@ function drawPerson(
 
   ctx.arc(
     p.x,
-    p.y-41+bob,
-    9,
+    p.y-64*s+bob,
+    10*s,
     Math.PI,
     Math.PI*2
   );
@@ -2475,18 +3036,18 @@ function drawPerson(
 
 
   if (
-    playerMode
+    isPlayer
   ) {
 
     ctx.fillStyle =
-      "#e2c85d";
+      "#e2c25b";
 
 
     ctx.fillRect(
-      p.x-11,
-      p.y-28+bob,
-      22,
-      3
+      p.x-12*s,
+      p.y-48*s+bob,
+      24*s,
+      4*s
     );
 
   }
@@ -2495,83 +3056,80 @@ function drawPerson(
 
 
 /* ==========================================================
-   STREET SIGNS
+   PEDESTRIANS
 ========================================================== */
 
-function drawStreetSign(
-  x,
-  y,
-  text
+const pedestrians = [
+
+  [650,3050,"#596e83"],
+  [1550,2920,"#835f53"],
+
+  [690,2700,"#55705b"],
+  [1510,2500,"#72586d"],
+
+  [650,2180,"#7c654f"],
+  [1550,2050,"#526b78"],
+
+  [680,1600,"#6b7150"],
+  [1530,1430,"#765c67"],
+
+  [650,950,"#4f6874"],
+  [1540,800,"#766351"]
+
+];
+
+
+/* ==========================================================
+   STREET DETAILS
+========================================================== */
+
+const bikes = [
+
+  [630,2800],
+  [655,2830],
+  [680,2860],
+
+  [1560,2260],
+  [1585,2290],
+
+  [630,1350],
+  [655,1380]
+
+];
+
+
+const lamps=[];
+
+
+for (
+  let y=550;
+  y<3500;
+  y+=420
 ) {
 
-  const p =
-    screen(x,y);
+  lamps.push([
+    690,
+    y
+  ]);
 
-
-  ctx.strokeStyle =
-    "#596463";
-
-  ctx.lineWidth =
-    4;
-
-
-  ctx.beginPath();
-
-  ctx.moveTo(
-    p.x,
-    p.y
-  );
-
-  ctx.lineTo(
-    p.x,
-    p.y-58
-  );
-
-  ctx.stroke();
-
-
-  ctx.fillStyle =
-    "#376b61";
-
-
-  ctx.fillRect(
-    p.x-45,
-    p.y-73,
-    90,
-    20
-  );
-
-
-  ctx.fillStyle =
-    "white";
-
-
-  ctx.font =
-    "10px sans-serif";
-
-  ctx.textAlign =
-    "center";
-
-
-  ctx.fillText(
-    text,
-    p.x,
-    p.y-59
-  );
+  lamps.push([
+    1510,
+    y+180
+  ]);
 
 }
 
 
 /* ==========================================================
-   OBJECT DEPTH
+   DRAW OBJECTS / DEPTH SORT
 ========================================================== */
 
-function drawObjects(time) {
+function drawWorldObjects(time) {
 
   const objects=[];
 
 
-  cityBuildings.forEach(
+  buildings.forEach(
     b => {
 
       objects.push({
@@ -2588,16 +3146,19 @@ function drawObjects(time) {
   );
 
 
-  streetTrees.forEach(
-    t => {
+  trees.forEach(
+    tree => {
 
       objects.push({
 
-        y:t.y,
+        y:tree.y,
 
         draw:
           () =>
-            drawStreetTree(t)
+            drawTree(
+              tree.x,
+              tree.y
+            )
 
       });
 
@@ -2605,19 +3166,18 @@ function drawObjects(time) {
   );
 
 
-  trafficLights.forEach(
-    t => {
+  lamps.forEach(
+    lamp => {
 
       objects.push({
 
-        y:t[1],
+        y:lamp[1],
 
         draw:
           () =>
-            drawTrafficLight(
-              t[0],
-              t[1],
-              time
+            drawLampPost(
+              lamp[0],
+              lamp[1]
             )
 
       });
@@ -2627,18 +3187,18 @@ function drawObjects(time) {
 
 
   pedestrians.forEach(
-    p => {
+    person => {
 
       objects.push({
 
-        y:p[1],
+        y:person[1],
 
         draw:
           () =>
             drawPerson(
-              p[0],
-              p[1],
-              p[2]
+              person[0],
+              person[1],
+              person[2]
             )
 
       });
@@ -2648,37 +3208,17 @@ function drawObjects(time) {
 
 
   bikes.forEach(
-    b => {
+    bike => {
 
       objects.push({
 
-        y:b[1],
+        y:bike[1],
 
         draw:
           () =>
             drawBike(
-              b[0],
-              b[1]
-            )
-
-      });
-
-    }
-  );
-
-
-  benches.forEach(
-    b => {
-
-      objects.push({
-
-        y:b[1],
-
-        draw:
-          () =>
-            drawBench(
-              b[0],
-              b[1]
+              bike[0],
+              bike[1]
             )
 
       });
@@ -2704,6 +3244,113 @@ function drawObjects(time) {
   );
 
 
+  /*
+     metro entrances
+  */
+
+  objects.push({
+
+    y:3000,
+
+    draw:
+      () =>
+        drawMetro(
+          650,
+          3000
+        )
+
+  });
+
+
+  objects.push({
+
+    y:1700,
+
+    draw:
+      () =>
+        drawMetro(
+          1540,
+          1700
+        )
+
+  });
+
+
+  /*
+     traffic lights
+  */
+
+  [
+    [720,2360],
+    [1480,2360],
+    [720,1160],
+    [1480,1160]
+
+  ].forEach(
+    light => {
+
+      objects.push({
+
+        y:light[1],
+
+        draw:
+          () =>
+            drawTrafficLight(
+              light[0],
+              light[1],
+              time
+            )
+
+      });
+
+    }
+  );
+
+
+  /*
+     bollards
+  */
+
+  for (
+    let y=450;
+    y<3500;
+    y+=180
+  ) {
+
+    objects.push({
+
+      y,
+
+      draw:
+        () =>
+          drawBollard(
+            755,
+            y
+          )
+
+    });
+
+
+    objects.push({
+
+      y:y+70,
+
+      draw:
+        () =>
+          drawBollard(
+            1445,
+            y+70
+          )
+
+    });
+
+  }
+
+
+  /*
+     player
+  */
+
   objects.push({
 
     y:player.y,
@@ -2713,7 +3360,7 @@ function drawObjects(time) {
         drawPerson(
           player.x,
           player.y,
-          "#3c675a",
+          "#3d695d",
           true
         )
 
@@ -2727,120 +3374,109 @@ function drawObjects(time) {
 
 
   objects.forEach(
-    o => o.draw()
+    object =>
+      object.draw()
   );
 
 }
 
 
 /* ==========================================================
-   SMALL STREET DETAILS
+   FOREGROUND
+
+   手前の物体を画面外にはみ出させる。
+
+   HD-2D感にかなり重要。
 ========================================================== */
 
-function drawStreetDetails() {
+function drawForeground(time) {
 
-  /*
-    metro entrances
-  */
+  const sway =
+    Math.sin(
+      time*.0007
+    ) *
+    5;
 
-  drawMetroEntrance(
-    650,
-    2300
-  );
 
-  drawMetroEntrance(
-    1940,
-    750
-  );
+  ctx.save();
 
 
   /*
-    signs
+     left canopy
   */
 
-  drawStreetSign(
-    760,
-    1480,
-    "钱江路"
-  );
+  ctx.fillStyle =
+    "rgba(20,48,39,.33)";
 
 
-  drawStreetSign(
-    1840,
-    520,
-    "市民中心"
-  );
+  for (
+    let i=0;
+    i<7;
+    i++
+  ) {
+
+    ctx.beginPath();
+
+    ctx.ellipse(
+      -20 +
+      i*18 +
+      sway,
+
+      H -
+      60 -
+      i*15,
+
+      55,
+      22,
+
+      -.5,
+
+      0,
+      Math.PI*2
+    );
+
+    ctx.fill();
+
+  }
 
 
   /*
-    manholes
+     right canopy
   */
 
-  drawManholes();
+  for (
+    let i=0;
+    i<7;
+    i++
+  ) {
+
+    ctx.beginPath();
+
+    ctx.ellipse(
+      W +
+      15 -
+      i*18 -
+      sway,
+
+      H -
+      70 -
+      i*15,
+
+      58,
+      22,
+
+      .5,
+
+      0,
+      Math.PI*2
+    );
+
+    ctx.fill();
+
+  }
 
 
-  /*
-    planters
-  */
-
-  const planters = [
-
-    [620,1980],
-    [1980,1880],
-    [620,820],
-    [1980,1180]
-
-  ];
-
-
-  planters.forEach(
-    p => {
-
-      const q =
-        screen(
-          p[0],
-          p[1]
-        );
-
-
-      ctx.fillStyle =
-        "#727b73";
-
-
-      ctx.fillRect(
-        q.x-24,
-        q.y-9,
-        48,
-        18
-      );
-
-
-      ctx.fillStyle =
-        "#56744f";
-
-
-      for (
-        let i=-17;
-        i<=17;
-        i+=8
-      ) {
-
-        ctx.beginPath();
-
-        ctx.arc(
-          q.x+i,
-          q.y-11,
-          8,
-          0,
-          Math.PI*2
-        );
-
-        ctx.fill();
-
-      }
-
-    }
-  );
+  ctx.restore();
 
 }
 
@@ -2852,54 +3488,60 @@ function drawStreetDetails() {
 function drawAtmosphere() {
 
   /*
-    sunlight
+     sunlight
   */
 
   ctx.save();
+
 
   ctx.globalCompositeOperation =
     "screen";
 
 
-  const g =
+  const light =
     ctx.createLinearGradient(
       0,
       0,
-      VW,
-      VH
+      W,
+      H
     );
 
 
-  g.addColorStop(
+  light.addColorStop(
     0,
-    "rgba(255,244,195,.11)"
+    "rgba(255,244,195,.13)"
   );
 
-  g.addColorStop(
-    .55,
-    "rgba(255,244,195,.015)"
+
+  light.addColorStop(
+    .45,
+    "rgba(255,244,195,.025)"
   );
 
-  g.addColorStop(
+
+  light.addColorStop(
     1,
     "rgba(255,244,195,0)"
   );
 
 
-  ctx.fillStyle = g;
+  ctx.fillStyle =
+    light;
+
 
   ctx.fillRect(
     0,
     0,
-    VW,
-    VH
+    W,
+    H
   );
+
 
   ctx.restore();
 
 
   /*
-    distant haze
+     upper haze
   */
 
   const haze =
@@ -2907,34 +3549,31 @@ function drawAtmosphere() {
       0,
       0,
       0,
-      VH
+      H*.55
     );
 
 
   haze.addColorStop(
     0,
-    "rgba(225,234,232,.12)"
+    "rgba(228,238,235,.18)"
   );
 
-  haze.addColorStop(
-    .5,
-    "rgba(225,234,232,0)"
-  );
 
   haze.addColorStop(
     1,
-    "rgba(20,32,35,.025)"
+    "rgba(228,238,235,0)"
   );
 
 
   ctx.fillStyle =
     haze;
 
+
   ctx.fillRect(
     0,
     0,
-    VW,
-    VH
+    W,
+    H*.55
   );
 
 }
@@ -2949,37 +3588,58 @@ function draw(time) {
   ctx.clearRect(
     0,
     0,
-    VW,
-    VH
+    W,
+    H
   );
 
 
+  /*
+     BACKGROUND
+  */
+
   drawSky();
 
-  drawSkyline();
+  drawClouds(time);
 
-  drawGround();
-
-  drawSidewalk();
-
-  drawRoad();
-
-  drawTactilePaving();
+  drawDistantSkyline();
 
 
   /*
-    intersections
+     GROUND
   */
 
-  drawCrosswalk(1850);
-  drawCrosswalk(850);
+  drawRoad();
+
+  drawSidewalkDetails();
+
+  drawTactilePaving();
+
+  drawLaneMarkings();
 
 
-  drawStreetDetails();
+  /*
+     intersections
+  */
 
-  drawObjects(time);
+  drawCrosswalk(2300);
+
+  drawCrosswalk(1100);
+
+
+  /*
+     WORLD OBJECTS
+  */
+
+  drawWorldObjects(time);
+
+
+  /*
+     POST PROCESS
+  */
 
   drawAtmosphere();
+
+  drawForeground(time);
 
 }
 
@@ -2999,7 +3659,9 @@ function loop(time) {
       (
         time -
         previous
-      ) / 1000,
+      ) /
+      1000,
+
       .05
     );
 

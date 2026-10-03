@@ -3,34 +3,35 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
   <title>杭州探索録3｜夜行杭州</title>
-
-  <link rel="stylesheet" href="style.css?v=night04">
+  <link rel="stylesheet" href="style.css?v=050">
 </head>
 
 <body>
 
 <div id="game">
-
   <canvas id="gameCanvas"></canvas>
 
   <div id="location">
     <div class="series">杭州探索録 3</div>
-    <div class="title">夜行杭州</div>
-    <div class="cn">HANGZHOU · NIGHT DISTRICT</div>
+    <div id="locationTitle" class="title">夜行杭州</div>
+    <div id="locationSub" class="cn">HANGZHOU · NIGHT DISTRICT</div>
+  </div>
+
+  <div id="interaction" class="hidden">
+    <span class="key">E</span>
+    <span id="interactionText">入る</span>
   </div>
 
   <div id="controls">
-    <span>WASD / 矢印キー</span>
-    <strong>移動</strong>
+    WASD / 矢印キー：移動　　E：調べる・入る
   </div>
 
   <div id="vignette"></div>
-
 </div>
 
-<script src="game.js?v=night04"></script>
+<script src="world.js?v=050"></script>
+<script src="game.js?v=050"></script>
 
 </body>
 </html>
